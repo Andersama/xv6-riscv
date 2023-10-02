@@ -18,7 +18,9 @@ printint(int fd, int xx, int base, int sgn)
   char buf[16];
   int i, neg;
   uint x;
-
+  uint d;
+  uint r;
+  
   neg = 0;
   if(sgn && xx < 0){
     neg = 1;
@@ -29,13 +31,46 @@ printint(int fd, int xx, int base, int sgn)
 
   i = 0;
   do{
-    buf[i++] = digits[x % base];
-  }while((x /= base) != 0);
-  if(neg)
-    buf[i++] = '-';
+    //Optimization Tip:
+    //On certain instruction sets / and % operations
+    //are performed at the same time with one
+    //instruction. Grouping / and % nearby can help
+    //your compiler pick up on this case.
+    //The riscv specifications recommend performing
+    //division and then remainder operations on the
+    //chance underlying hardware might do this for
+    //you at runtime.
+    d = x / base;
+    r = x % base;
+    x = d;
+    buf[i++] = digits[r];
+  }while(x != 0);
 
-  while(--i >= 0)
+  //if(neg)
+  //  buf[i++] = '-';
+  
+  //Optimization Example:
+  //When appending data so long as the cost of writing
+  //to memory on target hardware would be less than
+  //a branch it can be a good idea to always write
+  //and adjust the location being written to as needed
+
+  buf[i] = '-';
+  i += neg;
+
+  //Note: we use the boolean result to increment i
+  //While the end result here is similar, this isn't
+  //an optimization a compiler will perform without a
+  //bit more work potentially making this possible
+  //as these aren't semantically equivalent. This
+  //version for example will always write a '-'
+  //character into buf, while the original might have.
+
+  while(--i >= 0) {
     putc(fd, buf[i]);
+    //
+    buf[i] = 0;
+  }
 }
 
 static void
